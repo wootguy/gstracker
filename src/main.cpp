@@ -13,6 +13,12 @@
 #include <unordered_map>
 #include "main.h"
 #include "a2s.h"
+#include "zandronum.h"
+
+// TODO: use the API for player lists when steam fake ip is added to sven. Replaces A2S
+// SteamMatchmakingServers()->PingServer()
+// https://partner.steamgames.com/doc/api/ISteamMatchmakingServers
+// and SteamMatchmakingServers()->GetServerDetails()
 
 using namespace std;
 using namespace rapidjson;
@@ -315,7 +321,7 @@ ServerIpInfo get_ipinfo(const std::string& ip) {
 	return blankInfo;
 }
 
-bool getServerListJson(Value& serverList, Document& json) {
+bool getServerListJsonSteam(Value& serverList, Document& json) {
 	string requestUrl = server + api + "?key=" + apikey + "&filter=" + filter + "&limit=20000";
 
 	string response_string;
@@ -349,6 +355,65 @@ bool getServerListJson(Value& serverList, Document& json) {
 
 	serverList = temp["servers"];
 	return true;
+}
+
+bool getServerListJsonZandronum(Value& serverList, Document& json) {
+	update_zandronum_servers();
+
+	json.Parse("{\"servers\": []}");
+	serverList = json["servers"];
+
+	auto& allocator = json.GetAllocator();
+
+	// convert to steam object layout
+	for (auto item : g_zandronum_servers) {
+		ZanSvResp& sv = item.second;
+
+		if (!sv.valid)
+			continue;
+
+		int num_players = 0;
+		int num_bots = 0;
+		for (ZanPlayerDat& plr : sv.players) {
+			if (plr.bot) {
+				num_bots += 1;
+			}
+			else {
+				num_players += 1;
+			}
+		}
+
+		Value obj;
+		Value name(sv.name.c_str(), allocator);
+		Value map(sv.mapname.c_str(), allocator);
+		Value addr(item.first.c_str(), allocator);
+		Value os("", allocator);
+
+		obj.SetObject();
+		obj.AddMember("name", name, allocator);
+		obj.AddMember("map", map, allocator);
+		obj.AddMember("players", num_players, allocator);
+		obj.AddMember("max_players", sv.maxplayers, allocator);
+		obj.AddMember("bots", num_bots, allocator);
+		obj.AddMember("addr", addr, allocator);
+		obj.AddMember("flags", FL_SERVER_DEDICATED, allocator);
+		obj.AddMember("dedicated", true, allocator);
+		obj.AddMember("secure", false, allocator);
+		obj.AddMember("os", os, allocator);
+
+		serverList.PushBack(obj, allocator);
+	}
+
+	return true;
+}
+
+bool getServerListJson(Value& serverList, Document& json) {
+	if (appid == "zandronum") {
+		return getServerListJsonZandronum(serverList, json);
+	}
+	else {
+		return getServerListJsonSteam(serverList, json);
+	}
 }
 
 bool parseSteamServerJson(Value& json, ServerState& state) {
@@ -1480,7 +1545,7 @@ int main(int argc, char** argv) {
 		return 0;
 	}
 
-	a2s_init();
+	net_init();
 
 	appid = argv[1];
 	filter = "\\appid\\" + appid + "\\dedicated\\1";
@@ -1545,7 +1610,11 @@ int main(int argc, char** argv) {
 
 		printf("Server list fetched in %.1fs.\n", (getEpochMillis() - fetchStartTime) / 1000.0f);
 
-		a2s_query_all();
+		if (appid == "zandronum") {
+			populate_zandronum_player_lists();
+		} else {
+			a2s_query_all();
+		}
 
 		printf("Total update time: %.2fs\n\n", (getEpochMillis() - updateStartTime) / 1000.0f);
 		
@@ -1580,7 +1649,7 @@ int main(int argc, char** argv) {
 		} while (nextWriteTime < now);
 	}
 	
-	a2s_cleanup();
+	net_cleanup();
 
 	return 0;
 }

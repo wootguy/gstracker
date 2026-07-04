@@ -81,6 +81,9 @@
 			.row.odd.rc, thead.rc {
 				background-color: rgb(87, 37, 37);
 			}
+			.row.odd.zan, thead.zan {
+				background-color: rgb(49, 61, 26);
+			}
 			.server-row.odd:hover {
 				cursor: pointer;
 				background: #3B495E;
@@ -171,6 +174,7 @@
 				text-overflow: ellipsis;
 				white-space: nowrap;
 				min-width: 100px;
+				max-width: 510px;
 			}
 			.name-cell a {
 				max-width: 400px;
@@ -357,6 +361,7 @@
 							<option value="hl" selected>Half-Life</option>
 							<option value="rc">Ricochet</option>
 							<option value="sc">Sven Co-op</option>
+							<option value="zan">Zandronum</option>
 						</select>
 						&nbsp;&nbsp;
 						
@@ -397,14 +402,7 @@ Hover your mouse over a rank number to see its &quot;player hours&quot; stat, wh
 								<div class="player-list-container">
 									<table class="player-list">
 										<thead class="player-table-header">
-											<th title="Player list reported by the server.
-
-This table may include bots, non-steam players, or entirely fake data. Leaving/joining players and map changes can temporarily desync this table with the Steam master server player count (top right number).
-
-The ranking system doesn't use this player count because server owners are actively faking it. The Steam master server player counter can't be faked without Steam account farms. I've only seen those used in Counter-Strike so far.
-
-If you see a server with '0 / 32' players while this table is full, then it's likely a fake/proxy server."
-											class="player-header">X Players + Y Bots</th>
+											<th class="player-header">X Players + Y Bots</th>
 											<th title="Player's in-game score">Score</th>
 											<th title="Time spent on the server (current session, not total time)">Time</th>
 										</thead>

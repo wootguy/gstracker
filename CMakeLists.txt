@@ -4,7 +4,10 @@ project(SvenTracker)
 set(SOURCE_FILES 
     src/main.h src/main.cpp
     src/util.h src/util.cpp
+    src/net_util.h src/net_util.cpp
+    src/mstream.h src/mstream.cpp
     src/a2s.h src/a2s.cpp
+	src/zandronum.h src/zandronum.cpp
 )
 
 include_directories(include)

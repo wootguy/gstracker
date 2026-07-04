@@ -8,19 +8,7 @@
 #include <chrono>
 #include "main.h"
 #include "util.h"
-
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-typedef int socklen_t;
-#pragma comment(lib, "ws2_32.lib")
-#else
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <fcntl.h>
-#endif
+#include "net_util.h"
 
 using namespace std::chrono;
 
@@ -44,13 +32,6 @@ struct QueryJob {
     std::vector<Player> players;
     bool success = false;
 };
-
-int g_a2s_socket;
-
-void sendPacket(const sockaddr_in& addr, const std::vector<uint8_t>& packet) {
-    sendto(g_a2s_socket, (const char*)packet.data(), packet.size(), 0,
-        (const sockaddr*)&addr, sizeof(addr));
-}
 
 std::vector<Player> parsePlayers(std::vector<uint8_t>& data) {
     size_t i = 5;
@@ -77,88 +58,6 @@ std::vector<Player> parsePlayers(std::vector<uint8_t>& data) {
     }
     return players;
 } 
-
-uint64_t netaddr_to_uint64(sockaddr_in& addr) {
-    return (uint64_t)addr.sin_addr.s_addr + ((uint64_t)addr.sin_port << 32);
-}
-
-sockaddr_in uint64_to_netaddr(uint64_t addrint) {
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = (addrint >> 32) & 0xffff;
-    addr.sin_addr.s_addr = addrint & 0xffffffff;
-    return addr;
-}
-
-uint64_t ipstring_to_uint64(const std::string& ipstring) {
-    int sep = ipstring.find("_");
-    if (sep == -1) {
-        return 0;
-    }
-
-    std::string ip = ipstring.substr(0, sep);
-    std::string port = ipstring.substr(sep + 1);
-
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(atoi(port.c_str()));
-    addr.sin_addr.s_addr = inet_addr(ip.c_str());
-
-    return netaddr_to_uint64(addr);
-}
-
-std::string netaddr_to_ipstring(const sockaddr_in& addr)
-{
-    char ipstr[128] = { 0 };
-
-#ifdef _WIN32
-    inet_ntop(AF_INET, (void*)&addr.sin_addr, ipstr, sizeof(ipstr));
-#else
-    inet_ntop(AF_INET, &addr.sin_addr, ipstr, sizeof(ipstr));
-#endif
-
-    return std::string(ipstr) + "_" + std::to_string(ntohs(addr.sin_port));
-}
-
-bool a2s_init() {
-#ifdef _WIN32
-    WSADATA wsa;
-    WSAStartup(MAKEWORD(2, 2), &wsa);
-#endif
-
-    g_a2s_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (g_a2s_socket < 0) {
-        printf("Failed to create A2S socket\n");
-        return false;
-    }
-
-#ifdef _WIN32
-    u_long mode = 1; // 1 = non-blocking, 0 = blocking
-    if (ioctlsocket(g_a2s_socket, FIONBIO, &mode) != 0) {
-        printf("ioctlsocket failed: %d\n", WSAGetLastError());
-    }
-#else
-    int flags = fcntl(g_a2s_socket, F_GETFL, 0);
-    if (flags == -1) {
-        printf("fcntl F_GETFL");
-    }
-
-    if (fcntl(g_a2s_socket, F_SETFL, flags | O_NONBLOCK) == -1) {
-        printf("fcntl F_SETFL");
-    }
-#endif
-
-    return true;
-}
-
-void a2s_cleanup() {
-#ifdef _WIN32
-    closesocket(g_a2s_socket);
-    WSACleanup();
-#else
-    close(g_a2s_socket);
-#endif
-}
 
 void a2s_query_all() {
     uint64_t a2sStartTime = getEpochMillis();
@@ -207,7 +106,7 @@ void a2s_query_all() {
             switch (job.state) {
             case QJ_NOT_STARTED:
                 //printf("Get challenge: %s\n", netaddr_to_ipstring(job.addr).c_str());
-                sendPacket(job.addr, get_challenge_packet);
+                sendPacket(g_udp_socket, job.addr, get_challenge_packet);
                 job.state = QJ_WAIT_CHALLENGE;
                 job.lastReq = now;
                 challengeReqs++;
@@ -216,7 +115,7 @@ void a2s_query_all() {
             case QJ_GOT_CHALLENGE: {
                 std::vector<uint8_t> p = get_players_packet;
                 p.insert(p.end(), (uint8_t*)&job.challenge, (uint8_t*)&job.challenge + 4);
-                sendPacket(job.addr, p);
+                sendPacket(g_udp_socket, job.addr, p);
                 //printf("Get players: %s\n", netaddr_to_ipstring(job.addr).c_str());
                 job.state = QJ_WAIT_PLAYERS;
                 job.lastReq = now;
@@ -263,7 +162,7 @@ void a2s_query_all() {
             socklen_t len = sizeof(sockaddr_in);
             sockaddr_in from;
 
-            int ret = recvfrom(g_a2s_socket, (char*)buf, sizeof(buf), 0, (sockaddr*)&from, &len);
+            int ret = recvfrom(g_udp_socket, (char*)buf, sizeof(buf), 0, (sockaddr*)&from, &len);
             if (ret <= 0)
                 break; // no more queued packets
 

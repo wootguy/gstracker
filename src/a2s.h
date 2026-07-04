@@ -1,3 +1,4 @@
-bool a2s_init();
-void a2s_cleanup();
+bool net_init();
+void net_cleanup();
+
 void a2s_query_all();

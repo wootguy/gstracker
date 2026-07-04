@@ -840,6 +840,20 @@ function update_table() {
 	var timeLeft = g_server_data["rankFreq"] - (now - g_server_data["lastRankTime"]);
 	console.log("Next rank update in " + Math.round(timeLeft/60) + " minutes");
 	
+	var game = document.getElementById("game_selector").value;
+	let zan_pinfo_tip = "Player list reported by the server." +
+	"\n\nThis table may include bots, non-steam players, or entirely fake data. The player count may also be fake."
+	let steam_pinfo_tip = "Player list reported by the server." +
+	"\n\nThis table may include bots, non-steam players, or entirely fake data. Leaving/joining players and map changes can temporarily desync this table with the Steam master server player count (top right number)." +
+	"\n\nThe ranking system doesn't use this player count because server owners are actively faking it. The Steam master server player counter can't be faked without Steam account farms. I've only seen those used in Counter-Strike so far." +
+	"\n\nIf you see a server with '0 / 32' players while this table is full, then it's likely a fake/proxy server."
+	
+	document.getElementsByClassName("player-header");
+	
+	document.querySelectorAll(".player-header").forEach(element => {
+		element.title = game == "zan" ? zan_pinfo_tip : steam_pinfo_tip;
+	});
+	
 	contentDiv.scrollTop = oldScrollPos;
 }
 
@@ -964,6 +978,9 @@ function update_game() {
 		g_graphLineColor = "#d90000";
 	} else if (game == "cs") {
 		document.getElementById("game-title").textContent = "Counter-Strike";
+		g_graphLineColor = "#d9d900";
+	} else if (game == "zan") {
+		document.getElementById("game-title").textContent = "Zandronum";
 		g_graphLineColor = "#d9d900";
 	}
 	
