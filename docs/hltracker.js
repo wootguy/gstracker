@@ -1,3 +1,7 @@
+// TODO:
+// - graph doesn't refresh if you expand it, collapse it, wait a few hours, then expand it again. Have to wait until Next
+//   refresh or toggle the time window
+
 var database_server = "https://w00tguy.no-ip.org/hltracker/";
 var stats_live_path = "stats/live/";
 var stats_avg_path = "stats/avg/";
@@ -698,7 +702,7 @@ function fetch_graph(serverid) {
 
 function expand_server_row(serverid, redraw) {
 	var expand_content = document.getElementsByClassName("server-content-row " + serverid)[0];
-	var expand_row = document.getElementsByClassName("server-row " + serverid)[0];
+	var expand_row = document.querySelector(".server-row[serverid='" + serverid + "']");
 	
 	expand_content.classList.add("expanded");
 	expand_row.classList.add("expanded");
@@ -713,6 +717,8 @@ function expand_server_row(serverid, redraw) {
 		
 		updatePlayerTable(serverid);
 	}
+	
+	save_settings();
 }
 
 function update_table() {
@@ -781,7 +787,7 @@ function update_table() {
 		if (servers[key]["country"] == 'XX')
 			cnText = '';
 		var locText = servers[key]["region"] + cnText;
-		row.setAttribute("class", "row server-row " + key + " " + classodd + " " + gameClass);
+		row.setAttribute("class", "row server-row " + classodd + " " + gameClass);
 		row.setAttribute("serverid", key);
 		row.getElementsByClassName("rank-cell")[0].textContent = addedRows+1;
 		row.getElementsByClassName("rank-cell")[0].title = playerHours.toLocaleString(undefined, { maximumFractionDigits: 0  }) + " player hours";
@@ -806,6 +812,7 @@ function update_table() {
 			if (expand_content.classList.contains("expanded")) {
 				expand_content.classList.remove("expanded");
 				event.currentTarget.classList.remove("expanded");
+				save_settings();
 			} else {
 				if (document.getElementsByClassName("server-content-row expanded").length >= 50) {
 					alert("50 graphs max. Close the other ones.");
@@ -826,7 +833,7 @@ function update_table() {
 		addedRows++;
 	}
 	
-	console.log("Table updated");
+	console.log("Table updated added " + addedRows + " rows");
 	
 	for (var i = 0; i < reload_graph_keys.length; i++) {
 		expand_server_row(reload_graph_keys[i], true);
@@ -857,14 +864,87 @@ function update_table() {
 	contentDiv.scrollTop = oldScrollPos;
 }
 
+function save_settings() {
+	g_settings.show_offline = document.getElementById("filter_offline").checked ;
+	g_settings.show_dead = document.getElementById("filter_dead").checked;
+	g_settings.hide_unselected = document.getElementById("filter_collapsed").checked;
+	g_settings.show_players = document.getElementById("show_players").checked;
+	g_settings.game = document.getElementById("game_selector").value;
+	g_settings.time_window = document.querySelector(".chart-time.active").textContent;
+	
+	if (!initial_game_load) {
+		let game = document.getElementById("game_selector").value;
+		g_settings.expanded[game] = [];
+		document.querySelectorAll(".server-row.expanded").forEach(row => {
+			g_settings.expanded[game].push(row.getAttribute("serverid"));
+		}); 
+	}
+	
+	localStorage.setItem("settings", JSON.stringify(g_settings));
+}
+
+function load_expansions() {
+	let expansions = g_settings.expanded[g_settings.game];
+	let anyExpanded = false;
+	
+	if (expansions) {
+		for (let x = 0; x < expansions.length; x++) {
+			let id = expansions[x];
+			var expand_row = document.querySelector(".server-row[serverid='" + id + "']");
+			
+			if (expand_row) {
+				expand_server_row(id, true);
+				anyExpanded = true;
+				document.getElementById("filter_collapsed").disabled = false;
+			}
+		}
+	}
+	
+	return anyExpanded;
+}
+
+function load_settings() {
+	g_settings = JSON.parse(localStorage.getItem("settings")) || {
+		game: "hl",
+		show_offline: true,
+		show_dead: false,
+		show_players: true,
+		hide_unselected: false,
+		time_window: "14d",
+		expanded: {},
+	};
+	
+	document.getElementById("filter_offline").checked = g_settings.show_offline;
+	document.getElementById("filter_dead").checked = g_settings.show_dead;
+	document.getElementById("filter_collapsed").checked = g_settings.hide_unselected;
+	document.getElementById("show_players").checked = g_settings.show_players;
+	document.getElementById("game_selector").value = g_settings.game;
+	
+	let timebuts = document.getElementsByClassName("chart-time");
+	for (let i = 0; i < timebuts.length; i++) {
+		if (timebuts[i].textContent == g_settings.time_window) {
+			timebuts[i].classList.add("active");
+		} else {
+			timebuts[i].classList.remove("active");
+		}
+	}
+}
+
+var initial_game_load = true;
+
 function load_server_json() {
-	console.log("Fetch tracker data");
+	console.log("Fetch tracker data for " + database_server);
 	fetchJSONFile(database_server + "tracker.json", function(data) {
 		//console.log("Tracker data: ", data);
 		console.log("Tracker data loaded");
 		g_server_data = data;
 		g_data_cache = {};
 		update_table();
+		
+		if (initial_game_load) {
+			initial_game_load = false;
+			load_expansions();
+		}
 	});
 }
 
@@ -961,15 +1041,16 @@ function change_time_window() {
 	} else {
 		reload_charts();
 	}
+	
+	save_settings();
 }
 
-function update_game() {
-	var game = document.getElementById("game_selector").value;
+function update_game_styles() {
+	let game = document.getElementById("game_selector").value;
 	
 	if (game == "hl") {
 		document.getElementById("game-title").textContent = "Half-Life";
 		g_graphLineColor = "#d97400";
-		
 	} else if (game == "sc") {
 		document.getElementById("game-title").textContent = "Sven Co-op";
 		g_graphLineColor = "#0074d9";
@@ -984,6 +1065,24 @@ function update_game() {
 		g_graphLineColor = "#d9d900";
 	}
 	
+	var theader = document.getElementsByClassName("server-table-header")[0];
+	theader.setAttribute("class", "server-table-header " + game);
+	
+	document.querySelectorAll(".server-row").forEach(row => {
+		row.classList.remove("hl");
+		row.classList.remove("sc");
+		row.classList.remove("rc");
+		row.classList.remove("zan");
+		row.classList.add(game);
+	});
+}
+
+function update_game() {
+	initial_game_load = true;
+	var game = document.getElementById("game_selector").value;
+	
+	update_game_styles();
+	
 	var loader = document.getElementsByClassName("site-loader")[0];
 	loader.classList.add("loader");
 	
@@ -991,9 +1090,6 @@ function update_game() {
 	
 	database_server = "https://w00tguy.no-ip.org/" + game + "tracker/";
 	console.log("Using DB server: " + database_server);
-	
-	var theader = document.getElementsByClassName("server-table-header")[0];
-	theader.setAttribute("class", "server-table-header " + game);
 
 	var table_body = document.getElementsByClassName("server-table-body")[0];
 	table_body.textContent = "";
@@ -1015,8 +1111,8 @@ function toggle_players() {
 }
 
 document.addEventListener("DOMContentLoaded",function() {
+	load_settings();
 	update_game();
-	
 	handle_resize();
 	
 	var timeControls = document.getElementsByClassName("chart-time");
@@ -1026,19 +1122,25 @@ document.addEventListener("DOMContentLoaded",function() {
 	
 	document.getElementById("filter_offline").onchange = function() {
 		update_table();
+		save_settings();
 	};
 	document.getElementById("filter_dead").onchange = function() {
 		update_table();
+		save_settings();
 	};	
 	document.getElementById("filter_collapsed").onchange = function() {
 		update_table();
+		save_settings();
 	};
 	document.getElementById("game_selector").onchange = function() {
 		update_game();
+		save_settings();
 	};
 	document.getElementById("show_players").onchange = function() {
 		toggle_players();
+		save_settings();
 	};
 	
 	toggle_players();
+	update_game_styles();
 });
