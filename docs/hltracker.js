@@ -1,7 +1,3 @@
-// TODO:
-// - graph doesn't refresh if you expand it, collapse it, wait a few hours, then expand it again. Have to wait until Next
-//   refresh or toggle the time window
-
 var database_server = "https://w00tguy.no-ip.org/hltracker/";
 var stats_live_path = "stats/live/";
 var stats_avg_path = "stats/avg/";
@@ -679,8 +675,12 @@ function parseStatFile(serverid, dataView) {
 	}
 }
 
+function get_graph_data_path(serverid) {
+	return database_server + (g_useAvgData ? stats_avg_path : stats_live_path) + serverid + ".dat";;
+}
+
 function fetch_graph(serverid) {
-	let datpath = database_server + (g_useAvgData ? stats_avg_path : stats_live_path) + serverid + ".dat";
+	let datpath = get_graph_data_path(serverid);
 	
 	if (datpath in g_data_cache) {
 		console.log("Use cached: " + datpath);
@@ -698,6 +698,14 @@ function fetch_graph(serverid) {
 			}
 		});
 	}	
+}
+
+function clear_cache(serverid) {
+	let datpath = get_graph_data_path(serverid);
+	
+	delete g_data_cache[datpath];
+	delete g_server_stats[serverid];
+	console.log("Cleared cache for " + serverid);
 }
 
 function expand_server_row(serverid, redraw) {
@@ -989,12 +997,26 @@ function handle_resize(event) {
 
 function refetch_charts(delay) {
 	var graphs = document.getElementsByClassName("server-content-row expanded");
+	let expanded_ids = new Set([]);
+	
 	for (var i = 0; i < graphs.length; i++) {
 		let serverid = graphs[i].getAttribute("key");
+		expanded_ids.add(serverid);
 		
 		setTimeout(function () {
 			fetch_graph(serverid);
 		}, delay*i);
+	}
+	
+	// clear stale cache
+	let eraseIds = [];
+	for (const key in g_server_stats) {
+		if (!expanded_ids.has(key)) {
+			eraseIds.push(key);
+		}
+	}
+	for (let x = 0; x < eraseIds.length; x++) {
+		clear_cache(eraseIds[x]);
 	}
 }
 
