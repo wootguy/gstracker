@@ -708,7 +708,7 @@ function clear_cache(serverid) {
 	console.log("Cleared cache for " + serverid);
 }
 
-function expand_server_row(serverid, redraw) {
+function expand_server_row(serverid, redraw, no_save_settings) {
 	var expand_content = document.getElementsByClassName("server-content-row " + serverid)[0];
 	var expand_row = document.querySelector(".server-row[serverid='" + serverid + "']");
 	
@@ -726,7 +726,8 @@ function expand_server_row(serverid, redraw) {
 		updatePlayerTable(serverid);
 	}
 	
-	save_settings();
+	if (!no_save_settings)
+		save_settings();
 }
 
 function update_table() {
@@ -888,12 +889,12 @@ function save_settings() {
 		}); 
 	}
 	
-	localStorage.setItem("settings", JSON.stringify(g_settings));
+	localStorage.setItem("gstracker", JSON.stringify(g_settings));
 }
 
 function load_expansions() {
-	let expansions = g_settings.expanded[g_settings.game];
-	let anyExpanded = false;
+	let expansions = g_settings.expanded[g_settings.game];	
+	let numExpanded = 0;
 	
 	if (expansions) {
 		for (let x = 0; x < expansions.length; x++) {
@@ -901,18 +902,20 @@ function load_expansions() {
 			var expand_row = document.querySelector(".server-row[serverid='" + id + "']");
 			
 			if (expand_row) {
-				expand_server_row(id, true);
-				anyExpanded = true;
+				setTimeout(function() {
+					expand_server_row(id, true, true);
+				}, numExpanded * 500);
+				numExpanded += 1;
 				document.getElementById("filter_collapsed").disabled = false;
 			}
 		}
 	}
 	
-	return anyExpanded;
+	return numExpanded > 0;
 }
 
 function load_settings() {
-	g_settings = JSON.parse(localStorage.getItem("settings")) || {
+	g_settings = JSON.parse(localStorage.getItem("gstracker")) || {
 		game: "hl",
 		show_offline: true,
 		show_dead: false,
@@ -932,6 +935,8 @@ function load_settings() {
 	for (let i = 0; i < timebuts.length; i++) {
 		if (timebuts[i].textContent == g_settings.time_window) {
 			timebuts[i].classList.add("active");
+			let minutes = parseInt(timebuts[i].getAttribute("minutes"));
+			g_timeWindow = minutes*60;
 		} else {
 			timebuts[i].classList.remove("active");
 		}
