@@ -516,7 +516,11 @@ function updatePlayerTable(serverid) {
 		let timeTool = dat["timeTool"];
 		
 		let row = plist.insertRow(plist.rows.length);
-		row.innerHTML = '<tr class="player-row"><td class="player-name" title="' + name + '">' + name + '</td><td class="player-score" title="' + score + '">' + score + '</td><td class="player-time" title="' + timeTool + '">' + time + '</td></tr>';
+		row.innerHTML = '<tr class="player-row"><td class="player-name"></td><td class="player-score" title="' + score + '">' + score + '</td><td class="player-time" title="' + timeTool + '">' + time + '</td></tr>';
+		
+		let playerName = row.getElementsByClassName("player-name")[0];
+		playerName.textContent = name;
+		playerName.title = name;
 	}
 }
 
